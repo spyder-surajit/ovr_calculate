@@ -6,7 +6,7 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- CONFIGURATION (Render par environment variables se aayenge) ---
+# --- CONFIGURATION ---
 TELEGRAM_TOKEN = "8831883079:AAFVN7IBLx9rUPODFZMUbTRJaXY7QiSZNNw"
 GEMINI_API_KEY = "AQ.Ab8RN6LZFH6XNb4v7DEA7trTDa-jttX2WJJrpFmL0a4fXEcrSA"
 
@@ -26,16 +26,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Telegram par user photo bhejta hai toh sabse bada size select karna
     photo_file = await update.message.photo[-1].get_file()
-    
     status_msg = await update.message.reply_text("🔍 Spyder AI aapka squad screenshot scan kar raha hai... Please wait.")
     
     try:
-        # File ko bytes ke roop mein download karna memory mein
         img_bytearray = await photo_file.download_as_bytearray()
-        
-        # Gemini configuration for Vision analysis
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = (
@@ -47,14 +42,12 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "... up to P11."
         )
 
-        # AI ko image aur text bhejna
         cookie_image = {"mime_type": "image/jpeg", "data": bytes(img_bytearray)}
         result = model.generate_content([prompt, cookie_image])
         ai_output = result.text.strip()
         
         print(f"[AI RAW RESPONSE]:\n{ai_output}")
 
-        # Math Logic parsing
         total_base = 0
         total_rank = 0
         player_count = 0
@@ -63,7 +56,7 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for line in lines:
             if line.startswith('P') and ':' in line:
                 try:
-                    data_part = line.split(':')[1].trim()
+                    data_part = line.split(':')[1].strip()
                     parts = data_part.split(',')
                     if len(parts) == 2:
                         total_base += float(parts[0])
@@ -80,7 +73,6 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             final_rank = math.ceil(rank_avg)
             final_team_ovr = final_base + final_rank
 
-            # NEXT OVR TARGET LOGIC
             next_base_target = final_base if base_avg != final_base else final_base + 1
             base_points_needed = (next_base_target * 11) - total_base
 
@@ -109,10 +101,8 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot))
-    
     app.run_polling()
 
 if __name__ == '__main__':
