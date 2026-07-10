@@ -1,38 +1,35 @@
 import io
 import math
-import logging
-import requests
+import telebot
 import google.generativeai as genai
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # --- CONFIGURATION ---
 TELEGRAM_TOKEN = "8831883079:AAFVN7IBLx9rUPODFZMUbTRJaXY7QiSZNNw"
 GEMINI_API_KEY = "AQ.Ab8RN6LZFH6XNb4v7DEA7trTDa-jttX2WJJrpFmL0a4fXEcrSA"
 
-# Gemini setup
+# Bot aur Gemini setup
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Logging configuration
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
     welcome_text = (
         "🤖 **SPYDER AI SQUAD SCANNER ON** 🤖\n\n"
         "Bhai, Render cloud par tumhara permanent server active hai!\n"
         "Apne FC Mobile team ka clear screenshot direct chat par send karo.\n\n"
-        "AI poore 11 players ka Base OVR aur Ranks scan karke instantly next OVR ka exact target bata dega, bina kisi ad ke!"
+        "AI poore 11 players ka Base OVR aur Ranks scan karke instantly next OVR ka exact target bata dega!"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    bot.reply_to(message, welcome_text, parse_mode="Markdown")
 
-async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo_file = await update.message.photo[-1].get_file()
-    status_msg = await update.message.reply_text("🔍 Spyder AI aapka squad screenshot scan kar raha hai... Please wait.")
+@bot.message_handler(content_types=['photo'])
+def handle_screenshot(message):
+    status_msg = bot.reply_to(message, "🔍 Spyder AI aapka squad screenshot scan kar raha hai... Please wait.")
     
     try:
-        img_bytearray = await photo_file.download_as_bytearray()
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
         
+        model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = (
             "Analyze this FC Mobile squad screenshot. Identify the 11 active starting players. "
             "Extract their Base OVR (number between 60-110) and their Rank Up level (count the colored gem rank: 0 if no rank, 1 for Green, 2 for Blue, 3 for Purple, 4 for Red, 5 for Orange). "
@@ -42,7 +39,7 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "... up to P11."
         )
 
-        cookie_image = {"mime_type": "image/jpeg", "data": bytes(img_bytearray)}
+        cookie_image = {"mime_type": "image/jpeg", "data": downloaded_file}
         result = model.generate_content([prompt, cookie_image])
         ai_output = result.text.strip()
         
@@ -91,19 +88,14 @@ async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"• Squad mein kul *+{int(rank_points_needed)} Rank Up* points badhane honge.\n\n"
                 f"_Processed 24x7 via Render Cloud without Ads._"
             )
-            await status_msg.edit_text(report, parse_mode="Markdown")
+            bot.edit_message_text(report, chat_id=message.chat.id, message_id=status_msg.message_id, parse_mode="Markdown")
         else:
-            await status_msg.edit_text("❌ AI screenshot se poore 11 players scan nahi kar paya. Kripya ek clear aur crop bina kiya hua screenshot bhejein.")
+            bot.edit_message_text("❌ AI screenshot se poore 11 players scan nahi kar paya. Kripya ek clear aur bina crop kiya hua screenshot bhejein.", chat_id=message.chat.id, message_id=status_msg.message_id)
 
     except Exception as e:
         print(f"[ERROR]: {e}")
-        await status_msg.edit_text("❌ Error aaya processing mein. Kripya screenshot clear bhejein ya kuch der baad try karein.")
-
-def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_screenshot))
-    app.run_polling()
+        bot.edit_message_text("❌ Error aaya processing mein. Kripya screenshot clear bhejein.", chat_id=message.chat.id, message_id=status_msg.message_id)
 
 if __name__ == '__main__':
-    main()
+    print("Bot is starting...")
+    bot.infinity_polling()
